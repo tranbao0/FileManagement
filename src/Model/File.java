@@ -72,6 +72,11 @@ public class File implements Serializable {
         return content;
     }
 
+    // gets content without updating accessed time (for internal comparisons)
+    public String getContentRaw() {
+        return content;
+    }
+
     public int getSize() {
         return content.length();
     }
@@ -159,12 +164,39 @@ public class File implements Serializable {
 
     // version management --------------------------------
 
-    // saves current content as a new version; maintains MAX_VERSIONS amount of versions
-    public void saveVersion() {
+    // saves current content as a new version if content has changed
+    // maintains MAX_VERSIONS amount of versions
+    // @return true if a new version was saved, false if content unchanged
+    public boolean saveVersion() {
+        // check if content has actually changed from the last version
+        if (!versionHistory.isEmpty()) {
+            FileVersion lastVersion = versionHistory.get(versionHistory.size() - 1);
+            if (lastVersion.getContent().equals(content)) {
+                // content hasn't changed, don't save a new version
+                return false;
+            }
+        } else if (content.isEmpty()) {
+            // empty file with no history, don't save empty version
+            return false;
+        }
+
         FileVersion newVersion = new FileVersion(content, nextVersionNumber++);
         versionHistory.add(newVersion);
 
         // Trim old versions (removes oldest first)
+        while (versionHistory.size() > MAX_VERSIONS) {
+            versionHistory.remove(0);
+        }
+
+        return true;
+    }
+
+    // forces saving a version regardless of whether content changed
+    // useful for explicit save operations
+    public void forceSaveVersion() {
+        FileVersion newVersion = new FileVersion(content, nextVersionNumber++);
+        versionHistory.add(newVersion);
+
         while (versionHistory.size() > MAX_VERSIONS) {
             versionHistory.remove(0);
         }
@@ -195,7 +227,7 @@ public class File implements Serializable {
             return false;
         }
 
-        // save current state before restoring
+        // save current state before restoring (only if different)
         saveVersion();
 
         this.content = version.getContent();
@@ -212,6 +244,15 @@ public class File implements Serializable {
     // returns the total number of versions ever created (including trimmed ones)
     public int getTotalVersionsCreated() {
         return nextVersionNumber - 1;
+    }
+
+    // checks if current content differs from the last saved version
+    public boolean hasUnsavedChanges() {
+        if (versionHistory.isEmpty()) {
+            return !content.isEmpty(); // new file with content = unsaved
+        }
+        FileVersion lastVersion = versionHistory.get(versionHistory.size() - 1);
+        return !lastVersion.getContent().equals(content);
     }
 
     // deletion management --------------------------------
