@@ -1,10 +1,12 @@
 package Model;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 // snapshot of files' content at specific point in time; immutable
-public class FileVersion {
+public class FileVersion implements Serializable {
+    private static final long serialVersionUID = 1L;
     private final String content;
     private final LocalDateTime timestamp;
     private final int versionNumber;

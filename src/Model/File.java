@@ -1,11 +1,13 @@
 package Model;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.*;
 
 // simulated representation of a file in the file management system
 // contains metadata, content, tags, and version history.
-public class File {
+public class File implements Serializable {
+    private static final long serialVersionUID = 1L;
     // metadata
     private String name;
     private String content;
