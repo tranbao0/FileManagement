@@ -202,7 +202,6 @@ public class MainWindow extends JFrame {
     }
 
     // creates the main panel with split pane
-    // creates the main panel with split pane
     private void createMainPanel() {
         // left panel: file list
         fileListPanel = new FileListPanel(fileSystem);
@@ -280,18 +279,22 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // handle edit (placeholder - will implement editor dialog next)
+    // opens file in editor dialog for editing
     private void handleEdit(String fileName) {
         String content = fileSystem.readFileContent(fileName);
 
         if (content != null) {
-            // for now, show in simple dialog
+            // create editor dialog
             JTextArea textArea = new JTextArea(content, 20, 50);
             textArea.setLineWrap(true);
             textArea.setWrapStyleWord(true);
+            textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+
+            JScrollPane scrollPane = new JScrollPane(textArea);
+            scrollPane.setPreferredSize(new Dimension(600, 400));
 
             int result = JOptionPane.showConfirmDialog(this,
-                    new JScrollPane(textArea),
+                    scrollPane,
                     "Edit: " + fileName,
                     JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.PLAIN_MESSAGE);
@@ -300,11 +303,17 @@ public class MainWindow extends JFrame {
                 fileSystem.writeFileContent(fileName, textArea.getText());
                 refreshFileList();
                 updateDetailsPanel();
+                updateStatus("File saved: " + fileName);
             }
+        } else {
+            JOptionPane.showMessageDialog(this,
+                    "Could not open file: " + fileName,
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    // handle manage tags (placeholder)
+    // handle manage tags
     private void handleManageTags(String fileName) {
         Model.File file = fileSystem.getDirectory().getFile(fileName);
 
@@ -335,16 +344,18 @@ public class MainWindow extends JFrame {
 
             refreshFileList();
             updateDetailsPanel();
+            updateStatus("Tags updated for: " + fileName);
         }
     }
 
-    // handle view versions (placeholder)
+    // handle view versions
     private void handleViewVersions(String fileName) {
         List<Model.FileVersion> versions = fileSystem.listVersions(fileName);
 
         if (versions == null || versions.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "No versions available",
+                    "No versions available for this file.\n\n" +
+                            "Versions are saved automatically when you close a file after editing.",
                     "Version History",
                     JOptionPane.INFORMATION_MESSAGE);
             return;
@@ -353,7 +364,9 @@ public class MainWindow extends JFrame {
         // build version list message
         StringBuilder message = new StringBuilder("Version History for: " + fileName + "\n\n");
         for (Model.FileVersion v : versions) {
-            message.append(v.toString()).append("\n");
+            message.append("  • Version ").append(v.getVersionNumber())
+                    .append(" - ").append(v.getFormattedTimestamp())
+                    .append(" (").append(v.getSize()).append(" bytes)\n");
         }
         message.append("\nEnter version number to restore (or cancel):");
 
@@ -366,20 +379,23 @@ public class MainWindow extends JFrame {
 
                 if (restored) {
                     JOptionPane.showMessageDialog(this,
-                            "Version " + versionNum + " restored",
+                            "Version " + versionNum + " restored successfully.\n" +
+                                    "A new version was created with the previous content.",
                             "Success",
                             JOptionPane.INFORMATION_MESSAGE);
                     refreshFileList();
                     updateDetailsPanel();
+                    updateStatus("Restored version " + versionNum + " for: " + fileName);
                 } else {
                     JOptionPane.showMessageDialog(this,
-                            "Could not restore version",
+                            "Could not restore version " + versionNum + ".\n" +
+                                    "The version may not exist.",
                             "Error",
                             JOptionPane.ERROR_MESSAGE);
                 }
             } catch (NumberFormatException e) {
                 JOptionPane.showMessageDialog(this,
-                        "Invalid version number",
+                        "Invalid version number: " + input,
                         "Error",
                         JOptionPane.ERROR_MESSAGE);
             }
@@ -403,9 +419,11 @@ public class MainWindow extends JFrame {
                         JOptionPane.INFORMATION_MESSAGE);
                 refreshFileList();
                 updateDetailsPanel();
+                updateStatus("Restored: " + fileName);
             } else {
                 JOptionPane.showMessageDialog(this,
-                        "Could not restore file (name may already exist)",
+                        "Could not restore file.\n" +
+                                "A file with this name may already exist.",
                         "Error",
                         JOptionPane.ERROR_MESSAGE);
             }
@@ -436,6 +454,15 @@ public class MainWindow extends JFrame {
         statusLabel.setText(status);
     }
 
+    // updates status with a custom message
+    private void updateStatus(String message) {
+        statusLabel.setText(" " + message);
+        // reset to normal status after 3 seconds
+        Timer timer = new Timer(3000, e -> updateStatusBar());
+        timer.setRepeats(false);
+        timer.start();
+    }
+
     // adds shutdown hook to save file system on exit
     private void addShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -443,7 +470,7 @@ public class MainWindow extends JFrame {
         }));
     }
 
-    // menu action methods (placeholders for now) ---------------------------------
+    // menu action methods ---------------------------------
 
     private void createNewFile() {
         String fileName = JOptionPane.showInputDialog(this,
@@ -452,17 +479,25 @@ public class MainWindow extends JFrame {
                 JOptionPane.PLAIN_MESSAGE);
 
         if (fileName != null && !fileName.trim().isEmpty()) {
-            boolean created = fileSystem.createFile(fileName);
+            boolean created = fileSystem.createFile(fileName.trim());
 
             if (created) {
-                JOptionPane.showMessageDialog(this,
-                        "File created: " + fileName,
-                        "Success",
-                        JOptionPane.INFORMATION_MESSAGE);
                 refreshFileList();
+                updateStatus("Created: " + fileName);
+
+                // ask if user wants to edit the new file
+                int choice = JOptionPane.showConfirmDialog(this,
+                        "File created: " + fileName + "\n\nWould you like to edit it now?",
+                        "File Created",
+                        JOptionPane.YES_NO_OPTION);
+
+                if (choice == JOptionPane.YES_OPTION) {
+                    handleEdit(fileName.trim());
+                }
             } else {
                 JOptionPane.showMessageDialog(this,
-                        "File already exists or invalid name",
+                        "Could not create file.\n" +
+                                "A file with this name may already exist.",
                         "Error",
                         JOptionPane.ERROR_MESSAGE);
             }
@@ -480,29 +515,24 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        openFileInEditor(fileName);
-    }
-
-    // opens file in editor (placeholder for now)
-    private void openFileInEditor(String fileName) {
-        String content = fileSystem.readFileContent(fileName);
-
-        if (content != null) {
-            JOptionPane.showMessageDialog(this,
-                    "Opening: " + fileName + "\n\nContent:\n" + content,
-                    "File Content",
-                    JOptionPane.INFORMATION_MESSAGE);
-            // TODO: open in proper editor dialog in next phase
-        }
+        // open file in editor (same as double-click behavior)
+        handleEdit(fileName);
     }
 
     private void saveFileSystem() {
         boolean saved = FileSystemPersistence.save(fileSystem);
 
         if (saved) {
-            JOptionPane.showMessageDialog(this, "File system saved successfully", "Success", JOptionPane.INFORMATION_MESSAGE);
+            updateStatus("File system saved successfully");
+            JOptionPane.showMessageDialog(this,
+                    "File system saved successfully",
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
         } else {
-            JOptionPane.showMessageDialog(this, "Error saving file system", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Error saving file system",
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -533,22 +563,21 @@ public class MainWindow extends JFrame {
         }
 
         String newName = JOptionPane.showInputDialog(this,
-                "Enter new name:",
+                "Enter new name for '" + oldName + "':",
                 "Rename File",
                 JOptionPane.PLAIN_MESSAGE);
 
         if (newName != null && !newName.trim().isEmpty()) {
-            boolean renamed = fileSystem.renameFile(oldName, newName);
+            boolean renamed = fileSystem.renameFile(oldName, newName.trim());
 
             if (renamed) {
-                JOptionPane.showMessageDialog(this,
-                        "File renamed successfully",
-                        "Success",
-                        JOptionPane.INFORMATION_MESSAGE);
                 refreshFileList();
+                updateDetailsPanel();
+                updateStatus("Renamed: " + oldName + " → " + newName);
             } else {
                 JOptionPane.showMessageDialog(this,
-                        "Could not rename file (name may already exist)",
+                        "Could not rename file.\n" +
+                                "A file with this name may already exist.",
                         "Error",
                         JOptionPane.ERROR_MESSAGE);
             }
@@ -567,22 +596,20 @@ public class MainWindow extends JFrame {
         }
 
         String destName = JOptionPane.showInputDialog(this,
-                "Enter name for copy:",
+                "Enter name for copy of '" + sourceName + "':",
                 "Copy File",
                 JOptionPane.PLAIN_MESSAGE);
 
         if (destName != null && !destName.trim().isEmpty()) {
-            boolean copied = fileSystem.copyFile(sourceName, destName);
+            boolean copied = fileSystem.copyFile(sourceName, destName.trim());
 
             if (copied) {
-                JOptionPane.showMessageDialog(this,
-                        "File copied successfully",
-                        "Success",
-                        JOptionPane.INFORMATION_MESSAGE);
                 refreshFileList();
+                updateStatus("Copied: " + sourceName + " → " + destName);
             } else {
                 JOptionPane.showMessageDialog(this,
-                        "Could not copy file (name may already exist)",
+                        "Could not copy file.\n" +
+                                "A file with this name may already exist.",
                         "Error",
                         JOptionPane.ERROR_MESSAGE);
             }
@@ -600,25 +627,47 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        int choice = JOptionPane.showConfirmDialog(this,
-                "Move '" + fileName + "' to recycle bin?",
-                "Delete File",
-                JOptionPane.YES_NO_OPTION);
+        // check if we're in recycle bin view
+        if (fileListPanel.getViewMode() == FileListPanel.ViewMode.RECYCLE_BIN) {
+            // permanent delete
+            int choice = JOptionPane.showConfirmDialog(this,
+                    "Permanently delete '" + fileName + "'?\n\nThis cannot be undone.",
+                    "Permanent Delete",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
 
-        if (choice == JOptionPane.YES_OPTION) {
-            boolean deleted = fileSystem.deleteFile(fileName);
+            if (choice == JOptionPane.YES_OPTION) {
+                boolean deleted = fileSystem.permanentDelete(fileName);
 
-            if (deleted) {
-                JOptionPane.showMessageDialog(this,
-                        "File moved to recycle bin",
-                        "Success",
-                        JOptionPane.INFORMATION_MESSAGE);
-                refreshFileList();
-            } else {
-                JOptionPane.showMessageDialog(this,
-                        "Could not delete file",
-                        "Error",
-                        JOptionPane.ERROR_MESSAGE);
+                if (deleted) {
+                    refreshFileList();
+                    updateStatus("Permanently deleted: " + fileName);
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Could not delete file",
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } else {
+            // move to recycle bin
+            int choice = JOptionPane.showConfirmDialog(this,
+                    "Move '" + fileName + "' to recycle bin?",
+                    "Delete File",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (choice == JOptionPane.YES_OPTION) {
+                boolean deleted = fileSystem.deleteFile(fileName);
+
+                if (deleted) {
+                    refreshFileList();
+                    updateStatus("Moved to recycle bin: " + fileName);
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                            "Could not delete file",
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                }
             }
         }
     }
@@ -626,11 +675,13 @@ public class MainWindow extends JFrame {
     private void showAllFiles() {
         fileListPanel.setViewMode(FileListPanel.ViewMode.ALL_FILES);
         updateStatusBar();
+        updateStatus("Viewing all files");
     }
 
     private void showRecycleBin() {
         fileListPanel.setViewMode(FileListPanel.ViewMode.RECYCLE_BIN);
         updateStatusBar();
+        updateStatus("Viewing recycle bin");
     }
 
     private void refreshFileList() {
@@ -639,50 +690,116 @@ public class MainWindow extends JFrame {
     }
 
     private void searchFiles() {
-        String query = JOptionPane.showInputDialog(this,
-                "Enter search query:",
-                "Search Files",
-                JOptionPane.PLAIN_MESSAGE);
+        // create search options panel
+        JPanel searchPanel = new JPanel(new GridLayout(3, 1, 5, 5));
 
-        if (query != null && !query.trim().isEmpty()) {
-            java.util.List<Model.File> results = fileSystem.searchByName(query);
+        JTextField queryField = new JTextField(20);
 
-            StringBuilder message = new StringBuilder("Found " + results.size() + " file(s):\n\n");
-            for (Model.File f : results) {
-                message.append("- ").append(f.getName()).append("\n");
+        JRadioButton nameSearch = new JRadioButton("Search by name", true);
+        JRadioButton tagSearch = new JRadioButton("Search by tag");
+        JRadioButton contentSearch = new JRadioButton("Search by content");
+
+        ButtonGroup group = new ButtonGroup();
+        group.add(nameSearch);
+        group.add(tagSearch);
+        group.add(contentSearch);
+
+        searchPanel.add(new JLabel("Enter search query:"));
+        searchPanel.add(queryField);
+
+        JPanel radioPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        radioPanel.add(nameSearch);
+        radioPanel.add(tagSearch);
+        radioPanel.add(contentSearch);
+        searchPanel.add(radioPanel);
+
+        int result = JOptionPane.showConfirmDialog(this, searchPanel, "Search Files",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            String query = queryField.getText().trim();
+
+            if (!query.isEmpty()) {
+                java.util.List<Model.File> results;
+                String searchType;
+
+                if (tagSearch.isSelected()) {
+                    results = fileSystem.searchByTag(query);
+                    searchType = "tag";
+                } else if (contentSearch.isSelected()) {
+                    results = fileSystem.searchByContent(query);
+                    searchType = "content";
+                } else {
+                    results = fileSystem.searchByName(query);
+                    searchType = "name";
+                }
+
+                StringBuilder message = new StringBuilder();
+                message.append("Search results for \"").append(query).append("\" (by ").append(searchType).append("):\n\n");
+
+                if (results.isEmpty()) {
+                    message.append("No files found.");
+                } else {
+                    message.append("Found ").append(results.size()).append(" file(s):\n\n");
+                    for (Model.File f : results) {
+                        message.append("  • ").append(f.getName());
+                        if (!f.getTags().isEmpty()) {
+                            message.append(" [").append(String.join(", ", f.getTags())).append("]");
+                        }
+                        message.append("\n");
+                    }
+                }
+
+                JOptionPane.showMessageDialog(this,
+                        message.toString(),
+                        "Search Results",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+                updateStatus("Found " + results.size() + " file(s) matching \"" + query + "\"");
             }
-
-            JOptionPane.showMessageDialog(this,
-                    message.toString(),
-                    "Search Results",
-                    JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
     private void emptyRecycleBin() {
+        int deletedCount = fileSystem.getDeletedFileCount();
+
+        if (deletedCount == 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Recycle bin is already empty.",
+                    "Empty Recycle Bin",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
         int choice = JOptionPane.showConfirmDialog(this,
-                "Permanently delete all files in recycle bin?",
+                "Permanently delete all " + deletedCount + " file(s) in recycle bin?\n\n" +
+                        "This cannot be undone.",
                 "Empty Recycle Bin",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE);
 
         if (choice == JOptionPane.YES_OPTION) {
             int count = fileSystem.emptyRecycleBin();
+            refreshFileList();
+            updateStatus("Permanently deleted " + count + " file(s)");
             JOptionPane.showMessageDialog(this,
-                    "Deleted " + count + " files permanently",
+                    "Deleted " + count + " file(s) permanently",
                     "Success",
                     JOptionPane.INFORMATION_MESSAGE);
-            updateStatusBar();
         }
     }
 
     private void showAbout() {
         String message = "File Management System\n\n" +
                 "A simulated file system with features:\n" +
-                "- File creation, editing, deletion\n" +
-                "- Tag-based organization\n" +
-                "- Version history\n" +
-                "- Recycle bin\n\n" +
+                "  • File creation, editing, and deletion\n" +
+                "  • Tag-based organization\n" +
+                "  • Version history (up to 5 versions)\n" +
+                "  • Recycle bin with restore\n" +
+                "  • Persistent storage\n\n" +
+                "Files: " + fileSystem.getFileCount() + " active, " +
+                fileSystem.getDeletedFileCount() + " deleted\n" +
+                "Total operations: " + fileSystem.getTotalOperations() + "\n\n" +
                 "Built with Java Swing";
 
         JOptionPane.showMessageDialog(this, message, "About", JOptionPane.INFORMATION_MESSAGE);

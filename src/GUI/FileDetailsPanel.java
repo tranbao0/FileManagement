@@ -3,11 +3,9 @@ package GUI;
 import Management.FileSystem;
 import Model.File;
 import Model.FileVersion;
-import javax.swing.table.TableRowSorter;
 import javax.swing.*;
 import java.awt.*;
 import java.util.List;
-import java.util.Comparator;
 
 // panel that displays detailed information about a selected file
 // includes buttons for file operations
@@ -138,7 +136,20 @@ public class FileDetailsPanel extends JPanel {
         }
         info.append("\n");
 
-        info.append("Versions:       ").append(file.getVersionCount()).append("\n");
+        info.append("Versions:       ").append(file.getVersionCount());
+        if (file.getVersionCount() > 0) {
+            // show available version numbers
+            List<FileVersion> versions = file.getVersionHistory();
+            StringBuilder versionNums = new StringBuilder(" (");
+            for (int i = 0; i < versions.size(); i++) {
+                if (i > 0) versionNums.append(", ");
+                versionNums.append(versions.get(i).getVersionNumber());
+            }
+            versionNums.append(")");
+            info.append(versionNums);
+        }
+        info.append("\n");
+
         info.append("Status:         ").append(file.isDeleted() ? "DELETED" : "Active").append("\n");
         info.append("\n");
 
