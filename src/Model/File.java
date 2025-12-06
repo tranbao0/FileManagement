@@ -1,3 +1,5 @@
+package Model;
+
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -166,7 +168,7 @@ public class File {
     }
 
     // returns specific versions by its version number
-    // @return the FileVersion, or null if not found
+    // @return the Model.FileVersion, or null if not found
     public FileVersion getVersion(int versionNumber){
         for(FileVersion version : versionHistory) {
             if(version.getVersionNumber() == versionNumber) {
@@ -222,13 +224,13 @@ public class File {
     // other methods -----------------------------------------------
     @Override
     public String toString() {
-        return String.format("File{name='%s', size=%d bytes, tags=%s, deleted=%b, versions=%d", name, getSize(), tags, isDeleted, versionHistory.size());
+        return String.format("Model.File{name='%s', size=%d bytes, tags=%s, deleted=%b, versions=%d", name, getSize(), tags, isDeleted, versionHistory.size());
     }
 
     // return information about this file
     public String getDetailedInfo() {
         StringBuilder sb = new StringBuilder();
-        sb.append("File: ").append(name).append("\n");
+        sb.append("Model.File: ").append(name).append("\n");
         sb.append("Size: ").append(getSize()).append(" bytes\n");
         sb.append("Created: ").append(createdTime).append("\n");
         sb.append("Modified: ").append(modifiedTime).append("\n");
@@ -239,28 +241,3 @@ public class File {
         return sb.toString();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
