@@ -8,7 +8,7 @@ import java.awt.*;
 import java.util.List;
 
 // panel that displays detailed information about a selected file
-// includes buttons for file operations
+// includes buttons for file operations and shows storage block info
 public class FileDetailsPanel extends JPanel {
 
     private FileSystem fileSystem;
@@ -60,19 +60,16 @@ public class FileDetailsPanel extends JPanel {
         buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 5, 10));
         buttonPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
-        // edit button
         editButton = new JButton("Edit");
         editButton.setToolTipText("Edit file content");
         editButton.addActionListener(e -> handleEdit());
         buttonPanel.add(editButton);
 
-        // tags button
         tagsButton = new JButton("Tags");
         tagsButton.setToolTipText("Manage file tags");
         tagsButton.addActionListener(e -> handleTags());
         buttonPanel.add(tagsButton);
 
-        // versions button
         versionsButton = new JButton("Versions");
         versionsButton.setToolTipText("View version history");
         versionsButton.addActionListener(e -> handleVersions());
@@ -80,25 +77,21 @@ public class FileDetailsPanel extends JPanel {
 
         buttonPanel.add(new JSeparator(SwingConstants.VERTICAL));
 
-        // rename button
         renameButton = new JButton("Rename");
         renameButton.setToolTipText("Rename this file");
         renameButton.addActionListener(e -> handleRename());
         buttonPanel.add(renameButton);
 
-        // copy button
         copyButton = new JButton("Copy");
         copyButton.setToolTipText("Create a copy of this file");
         copyButton.addActionListener(e -> handleCopy());
         buttonPanel.add(copyButton);
 
-        // delete button
         deleteButton = new JButton("Delete");
         deleteButton.setToolTipText("Move to recycle bin");
         deleteButton.addActionListener(e -> handleDelete());
         buttonPanel.add(deleteButton);
 
-        // restore button (for deleted files)
         restoreButton = new JButton("Restore");
         restoreButton.setToolTipText("Restore from recycle bin");
         restoreButton.addActionListener(e -> handleRestore());
@@ -128,6 +121,49 @@ public class FileDetailsPanel extends JPanel {
         info.append("Accessed:       ").append(formatDateTime(file.getAccessedTime())).append("\n");
         info.append("\n");
 
+        // Storage information
+        info.append("STORAGE\n");
+        info.append("───────────────────────────────────────\n");
+        int blockCount = file.getBlockCount();
+        info.append("Blocks Used:    ").append(blockCount);
+        if (blockCount > 0) {
+            int blockSize = fileSystem.getStorageBlockSize();
+            int totalBlockSpace = blockCount * blockSize;
+            int wastedSpace = totalBlockSpace - file.getSize();
+            info.append(" (").append(totalBlockSpace).append(" bytes allocated");
+            if (wastedSpace > 0) {
+                info.append(", ").append(wastedSpace).append(" bytes padding");
+            }
+            info.append(")");
+        }
+        info.append("\n");
+
+        int[] blocks = file.getAllocatedBlocks();
+        if (blocks != null && blocks.length > 0) {
+            info.append("Block IDs:      ");
+            if (blocks.length <= 8) {
+                for (int i = 0; i < blocks.length; i++) {
+                    if (i > 0) info.append(", ");
+                    info.append(blocks[i]);
+                }
+            } else {
+                // Show first 4 and last 2
+                for (int i = 0; i < 4; i++) {
+                    if (i > 0) info.append(", ");
+                    info.append(blocks[i]);
+                }
+                info.append(", ... , ");
+                info.append(blocks[blocks.length - 2]).append(", ");
+                info.append(blocks[blocks.length - 1]);
+                info.append(" (").append(blocks.length).append(" total)");
+            }
+            info.append("\n");
+        }
+        info.append("\n");
+
+        // Tags
+        info.append("ORGANIZATION\n");
+        info.append("───────────────────────────────────────\n");
         info.append("Tags:           ");
         if (file.getTags().isEmpty()) {
             info.append("(none)");
@@ -138,7 +174,6 @@ public class FileDetailsPanel extends JPanel {
 
         info.append("Versions:       ").append(file.getVersionCount());
         if (file.getVersionCount() > 0) {
-            // show available version numbers
             List<FileVersion> versions = file.getVersionHistory();
             StringBuilder versionNums = new StringBuilder(" (");
             for (int i = 0; i < versions.size(); i++) {
@@ -160,7 +195,6 @@ public class FileDetailsPanel extends JPanel {
         if (content.isEmpty()) {
             info.append("(empty file)");
         } else {
-            // show first 500 characters
             if (content.length() > 500) {
                 info.append(content.substring(0, 500));
                 info.append("\n\n... (").append(content.length() - 500).append(" more characters)");
@@ -170,9 +204,8 @@ public class FileDetailsPanel extends JPanel {
         }
 
         infoTextArea.setText(info.toString());
-        infoTextArea.setCaretPosition(0); // scroll to top
+        infoTextArea.setCaretPosition(0);
 
-        // update button visibility based on file state
         updateButtons(isDeleted);
     }
 
@@ -190,7 +223,6 @@ public class FileDetailsPanel extends JPanel {
     // updates button visibility based on file state
     private void updateButtons(boolean isDeleted) {
         if (isDeleted) {
-            // deleted file - show only restore
             editButton.setVisible(false);
             tagsButton.setVisible(false);
             versionsButton.setVisible(false);
@@ -199,7 +231,6 @@ public class FileDetailsPanel extends JPanel {
             deleteButton.setVisible(false);
             restoreButton.setVisible(true);
         } else {
-            // active file - show all except restore
             editButton.setVisible(true);
             tagsButton.setVisible(true);
             versionsButton.setVisible(true);
@@ -215,7 +246,6 @@ public class FileDetailsPanel extends JPanel {
         this.currentFile = null;
         infoTextArea.setText("\n\n\n          No file selected\n\n          Select a file from the list to view details");
 
-        // hide all buttons
         editButton.setVisible(false);
         tagsButton.setVisible(false);
         versionsButton.setVisible(false);
@@ -225,7 +255,7 @@ public class FileDetailsPanel extends JPanel {
         restoreButton.setVisible(false);
     }
 
-    // button action handlers ---------------------------------
+    // button action handlers
 
     private void handleEdit() {
         if (currentFile != null && actionListener != null) {

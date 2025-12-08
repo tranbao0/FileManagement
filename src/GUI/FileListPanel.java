@@ -24,21 +24,22 @@ public class FileListPanel extends JPanel {
     private ViewMode currentView;
 
     public enum ViewMode {
-        ALL_FILES,      // show active files
-        RECYCLE_BIN     // show deleted files
+        ALL_FILES,
+        RECYCLE_BIN
     }
 
-    // column names for the table
+    // column names for the table - now includes Blocks
     private static final String[] COLUMN_NAMES = {
-            "Name", "Size (bytes)", "Modified", "Tags", "Versions"
+            "Name", "Size (bytes)", "Blocks", "Modified", "Tags", "Versions"
     };
 
     // column indices
     private static final int COL_NAME = 0;
     private static final int COL_SIZE = 1;
-    private static final int COL_MODIFIED = 2;
-    private static final int COL_TAGS = 3;
-    private static final int COL_VERSIONS = 4;
+    private static final int COL_BLOCKS = 2;
+    private static final int COL_MODIFIED = 3;
+    private static final int COL_TAGS = 4;
+    private static final int COL_VERSIONS = 5;
 
     // constructor
     public FileListPanel(FileSystem fileSystem) {
@@ -54,44 +55,40 @@ public class FileListPanel extends JPanel {
 
     // creates the table and scroll pane
     private void createTable() {
-        // create table model (non-editable)
         tableModel = new DefaultTableModel(COLUMN_NAMES, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false; // make table read-only
+                return false;
             }
 
-            // specify column types for proper sorting
             @Override
             public Class<?> getColumnClass(int columnIndex) {
                 switch (columnIndex) {
                     case COL_NAME:
                         return String.class;
                     case COL_SIZE:
-                        return Integer.class;  // size is integer
+                        return Integer.class;
+                    case COL_BLOCKS:
+                        return Integer.class;
                     case COL_MODIFIED:
                         return String.class;
                     case COL_TAGS:
                         return String.class;
                     case COL_VERSIONS:
-                        return Integer.class;  // versions is integer
+                        return Integer.class;
                     default:
                         return String.class;
                 }
             }
         };
 
-        // create table
         fileTable = new JTable(tableModel);
         fileTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         fileTable.setRowHeight(25);
 
-        // create and set the row sorter
         sorter = new TableRowSorter<>(tableModel);
         fileTable.setRowSorter(sorter);
 
-        // set custom comparators for specific columns
-        // size column - compare as integers
         sorter.setComparator(COL_SIZE, new Comparator<Integer>() {
             @Override
             public int compare(Integer o1, Integer o2) {
@@ -99,7 +96,13 @@ public class FileListPanel extends JPanel {
             }
         });
 
-        // versions column - compare as integers
+        sorter.setComparator(COL_BLOCKS, new Comparator<Integer>() {
+            @Override
+            public int compare(Integer o1, Integer o2) {
+                return o1.compareTo(o2);
+            }
+        });
+
         sorter.setComparator(COL_VERSIONS, new Comparator<Integer>() {
             @Override
             public int compare(Integer o1, Integer o2) {
@@ -108,13 +111,13 @@ public class FileListPanel extends JPanel {
         });
 
         // set column widths
-        fileTable.getColumnModel().getColumn(0).setPreferredWidth(200); // Name
-        fileTable.getColumnModel().getColumn(1).setPreferredWidth(100); // Size
-        fileTable.getColumnModel().getColumn(2).setPreferredWidth(150); // Modified
-        fileTable.getColumnModel().getColumn(3).setPreferredWidth(150); // Tags
-        fileTable.getColumnModel().getColumn(4).setPreferredWidth(80);  // Versions
+        fileTable.getColumnModel().getColumn(COL_NAME).setPreferredWidth(180);
+        fileTable.getColumnModel().getColumn(COL_SIZE).setPreferredWidth(80);
+        fileTable.getColumnModel().getColumn(COL_BLOCKS).setPreferredWidth(50);
+        fileTable.getColumnModel().getColumn(COL_MODIFIED).setPreferredWidth(130);
+        fileTable.getColumnModel().getColumn(COL_TAGS).setPreferredWidth(130);
+        fileTable.getColumnModel().getColumn(COL_VERSIONS).setPreferredWidth(60);
 
-        // add double-click listener
         fileTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -124,28 +127,24 @@ public class FileListPanel extends JPanel {
             }
         });
 
-        // add to scroll pane
         scrollPane = new JScrollPane(fileTable);
         add(scrollPane, BorderLayout.CENTER);
     }
 
     // loads files from file system into table
     public void loadFiles() {
-        // clear existing rows
         tableModel.setRowCount(0);
 
         List<File> files;
 
-        // get files based on current view
         if (currentView == ViewMode.ALL_FILES) {
-            files = fileSystem.listFiles(); // active files only
+            files = fileSystem.listFiles();
             setBorder(BorderFactory.createTitledBorder("Files (" + files.size() + ")"));
         } else {
-            files = fileSystem.listDeletedFiles(); // deleted files
+            files = fileSystem.listDeletedFiles();
             setBorder(BorderFactory.createTitledBorder("Recycle Bin (" + files.size() + ")"));
         }
 
-        // add files to table
         for (File file : files) {
             addFileToTable(file);
         }
@@ -153,13 +152,14 @@ public class FileListPanel extends JPanel {
 
     // adds a file to the table
     private void addFileToTable(File file) {
-        Object[] rowData = new Object[5];
+        Object[] rowData = new Object[6];
 
-        rowData[0] = file.getName();
-        rowData[1] = file.getSize();
-        rowData[2] = formatDateTime(file.getModifiedTime());
-        rowData[3] = formatTags(file.getTags());
-        rowData[4] = file.getVersionCount();
+        rowData[COL_NAME] = file.getName();
+        rowData[COL_SIZE] = file.getSize();
+        rowData[COL_BLOCKS] = file.getBlockCount();
+        rowData[COL_MODIFIED] = formatDateTime(file.getModifiedTime());
+        rowData[COL_TAGS] = formatTags(file.getTags());
+        rowData[COL_VERSIONS] = file.getVersionCount();
 
         tableModel.addRow(rowData);
     }
@@ -189,11 +189,9 @@ public class FileListPanel extends JPanel {
         int selectedRow = fileTable.getSelectedRow();
 
         if (selectedRow >= 0) {
-            // convert view index to model index for sorting
             int modelRow = fileTable.convertRowIndexToModel(selectedRow);
-            String fileName = (String) tableModel.getValueAt(modelRow, 0);
+            String fileName = (String) tableModel.getValueAt(modelRow, COL_NAME);
 
-            // notify listener (will be handled by MainWindow)
             if (doubleClickListener != null) {
                 doubleClickListener.onFileDoubleClicked(fileName);
             }
@@ -205,9 +203,8 @@ public class FileListPanel extends JPanel {
         int selectedRow = fileTable.getSelectedRow();
 
         if (selectedRow >= 0) {
-            // convert view index to model index for sorting
             int modelRow = fileTable.convertRowIndexToModel(selectedRow);
-            return (String) tableModel.getValueAt(modelRow, 0);
+            return (String) tableModel.getValueAt(modelRow, COL_NAME);
         }
 
         return null;
@@ -228,7 +225,7 @@ public class FileListPanel extends JPanel {
         return null;
     }
 
-    // sets the view mode (all files or recycle bin)
+    // sets the view mode
     public void setViewMode(ViewMode mode) {
         this.currentView = mode;
         loadFiles();

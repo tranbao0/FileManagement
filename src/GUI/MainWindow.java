@@ -8,7 +8,7 @@ import java.awt.event.*;
 import java.util.List;
 
 // main application window for the file management system
-// contains menu bar, toolbar, file list, details panel, and status bar
+// contains menu bar, toolbar, file list, details panel, storage panel, and status bar
 public class MainWindow extends JFrame {
 
     // core components
@@ -17,6 +17,7 @@ public class MainWindow extends JFrame {
     // UI components
     private FileListPanel fileListPanel;
     private FileDetailsPanel fileDetailsPanel;
+    private StoragePanel storagePanel;
     private JLabel statusLabel;
 
     // menu items
@@ -47,11 +48,10 @@ public class MainWindow extends JFrame {
     // sets up the main window properties
     private void setupWindow() {
         setTitle("File Management System");
-        setSize(900, 600);
+        setSize(1000, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null); // center on screen
+        setLocationRelativeTo(null);
 
-        // set layout
         setLayout(new BorderLayout());
     }
 
@@ -131,10 +131,19 @@ public class MainWindow extends JFrame {
         searchItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK));
         searchItem.addActionListener(e -> searchFiles());
 
+        JMenuItem storageInfoItem = new JMenuItem("Storage Info");
+        storageInfoItem.addActionListener(e -> showStorageInfo());
+
+        JMenuItem systemInfoItem = new JMenuItem("System Info");
+        systemInfoItem.addActionListener(e -> showSystemInfo());
+
         JMenuItem emptyBinItem = new JMenuItem("Empty Recycle Bin");
         emptyBinItem.addActionListener(e -> emptyRecycleBin());
 
         toolsMenu.add(searchItem);
+        toolsMenu.addSeparator();
+        toolsMenu.add(storageInfoItem);
+        toolsMenu.add(systemInfoItem);
         toolsMenu.addSeparator();
         toolsMenu.add(emptyBinItem);
 
@@ -162,13 +171,11 @@ public class MainWindow extends JFrame {
         toolBar = new JToolBar();
         toolBar.setFloatable(false);
 
-        // New File button
         JButton newButton = new JButton("New");
         newButton.setToolTipText("Create new file");
         newButton.addActionListener(e -> createNewFile());
         toolBar.add(newButton);
 
-        // Open button
         JButton openButton = new JButton("Open");
         openButton.setToolTipText("Open file");
         openButton.addActionListener(e -> openFile());
@@ -176,7 +183,6 @@ public class MainWindow extends JFrame {
 
         toolBar.addSeparator();
 
-        // Delete button
         JButton deleteButton = new JButton("Delete");
         deleteButton.setToolTipText("Delete file");
         deleteButton.addActionListener(e -> deleteFile());
@@ -184,7 +190,6 @@ public class MainWindow extends JFrame {
 
         toolBar.addSeparator();
 
-        // Search button
         JButton searchButton = new JButton("Search");
         searchButton.setToolTipText("Search files");
         searchButton.addActionListener(e -> searchFiles());
@@ -192,34 +197,37 @@ public class MainWindow extends JFrame {
 
         toolBar.addSeparator();
 
-        // Refresh button
         JButton refreshButton = new JButton("Refresh");
         refreshButton.setToolTipText("Refresh file list");
         refreshButton.addActionListener(e -> refreshFileList());
         toolBar.add(refreshButton);
 
+        toolBar.addSeparator();
+
+        JButton storageButton = new JButton("Storage");
+        storageButton.setToolTipText("View storage details");
+        storageButton.addActionListener(e -> showStorageInfo());
+        toolBar.add(storageButton);
+
         add(toolBar, BorderLayout.NORTH);
     }
 
-    // creates the main panel with split pane
+    // creates the main panel with split panes
     private void createMainPanel() {
         // left panel: file list
         fileListPanel = new FileListPanel(fileSystem);
 
-        // add selection listener to update details panel
         fileListPanel.addSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 updateDetailsPanel();
             }
         });
 
-        // add double-click listener to open files
         fileListPanel.setDoubleClickListener(fileName -> handleEdit(fileName));
 
         // right panel: file details
         fileDetailsPanel = new FileDetailsPanel(fileSystem);
 
-        // set action listener for detail panel buttons
         fileDetailsPanel.setActionListener(new FileDetailsPanel.FileActionListener() {
             @Override
             public void onEdit(String fileName) {
@@ -257,11 +265,20 @@ public class MainWindow extends JFrame {
             }
         });
 
-        // create split pane
+        // bottom right panel: storage info
+        storagePanel = new StoragePanel(fileSystem);
+        storagePanel.setPreferredSize(new Dimension(350, 120));
+
+        // Right side: details + storage
+        JPanel rightPanel = new JPanel(new BorderLayout());
+        rightPanel.add(fileDetailsPanel, BorderLayout.CENTER);
+        rightPanel.add(storagePanel, BorderLayout.SOUTH);
+
+        // create main split pane
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
                 fileListPanel,
-                fileDetailsPanel);
-        splitPane.setDividerLocation(500);
+                rightPanel);
+        splitPane.setDividerLocation(550);
         splitPane.setResizeWeight(0.6);
 
         add(splitPane, BorderLayout.CENTER);
@@ -279,12 +296,10 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // opens file in editor dialog for editing
     private void handleEdit(String fileName) {
         String content = fileSystem.readFileContent(fileName);
 
         if (content != null) {
-            // create editor dialog
             JTextArea textArea = new JTextArea(content, 20, 50);
             textArea.setLineWrap(true);
             textArea.setWrapStyleWord(true);
@@ -301,8 +316,7 @@ public class MainWindow extends JFrame {
 
             if (result == JOptionPane.OK_OPTION) {
                 fileSystem.writeFileContent(fileName, textArea.getText());
-                refreshFileList();
-                updateDetailsPanel();
+                refreshAll();
                 updateStatus("File saved: " + fileName);
             }
         } else {
@@ -313,7 +327,6 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // handle manage tags
     private void handleManageTags(String fileName) {
         Model.File file = fileSystem.getDirectory().getFile(fileName);
 
@@ -321,7 +334,6 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        // show current tags
         String currentTags = String.join(", ", file.getTags());
         String message = "Current tags: " + (currentTags.isEmpty() ? "(none)" : currentTags) + "\n\n";
         message += "Enter tags (comma-separated):";
@@ -329,12 +341,10 @@ public class MainWindow extends JFrame {
         String input = JOptionPane.showInputDialog(this, message, "Manage Tags", JOptionPane.PLAIN_MESSAGE);
 
         if (input != null) {
-            // clear existing tags
             for (String tag : file.getTags()) {
                 fileSystem.removeTag(fileName, tag);
             }
 
-            // add new tags
             if (!input.trim().isEmpty()) {
                 String[] tags = input.split(",");
                 for (String tag : tags) {
@@ -342,13 +352,11 @@ public class MainWindow extends JFrame {
                 }
             }
 
-            refreshFileList();
-            updateDetailsPanel();
+            refreshAll();
             updateStatus("Tags updated for: " + fileName);
         }
     }
 
-    // handle view versions
     private void handleViewVersions(String fileName) {
         List<Model.FileVersion> versions = fileSystem.listVersions(fileName);
 
@@ -361,7 +369,6 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        // build version list message
         StringBuilder message = new StringBuilder("Version History for: " + fileName + "\n\n");
         for (Model.FileVersion v : versions) {
             message.append("  • Version ").append(v.getVersionNumber())
@@ -383,8 +390,7 @@ public class MainWindow extends JFrame {
                                     "A new version was created with the previous content.",
                             "Success",
                             JOptionPane.INFORMATION_MESSAGE);
-                    refreshFileList();
-                    updateDetailsPanel();
+                    refreshAll();
                     updateStatus("Restored version " + versionNum + " for: " + fileName);
                 } else {
                     JOptionPane.showMessageDialog(this,
@@ -402,7 +408,6 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // handle restore from recycle bin
     private void handleRestore(String fileName) {
         int choice = JOptionPane.showConfirmDialog(this,
                 "Restore '" + fileName + "' from recycle bin?",
@@ -417,8 +422,7 @@ public class MainWindow extends JFrame {
                         "File restored successfully",
                         "Success",
                         JOptionPane.INFORMATION_MESSAGE);
-                refreshFileList();
-                updateDetailsPanel();
+                refreshAll();
                 updateStatus("Restored: " + fileName);
             } else {
                 JOptionPane.showMessageDialog(this,
@@ -445,25 +449,32 @@ public class MainWindow extends JFrame {
         updateStatusBar();
     }
 
-    // updates the status bar with current file system info
     private void updateStatusBar() {
-        String status = String.format(" %d files | %d open | %d deleted",
+        String status = String.format(" %d files | %d open | %d deleted | Storage: %.1f%% used (%d/%d blocks)",
                 fileSystem.getFileCount(),
                 fileSystem.getOpenFileCount(),
-                fileSystem.getDeletedFileCount());
+                fileSystem.getDeletedFileCount(),
+                fileSystem.getStorageUsagePercentage(),
+                fileSystem.getStorageUsedBlocks(),
+                fileSystem.getStorageTotalBlocks());
         statusLabel.setText(status);
     }
 
-    // updates status with a custom message
     private void updateStatus(String message) {
         statusLabel.setText(" " + message);
-        // reset to normal status after 3 seconds
         Timer timer = new Timer(3000, e -> updateStatusBar());
         timer.setRepeats(false);
         timer.start();
     }
 
-    // adds shutdown hook to save file system on exit
+    // refreshes all panels
+    private void refreshAll() {
+        fileListPanel.refresh();
+        storagePanel.refresh();
+        updateDetailsPanel();
+        updateStatusBar();
+    }
+
     private void addShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             FileSystemPersistence.save(fileSystem);
@@ -482,10 +493,9 @@ public class MainWindow extends JFrame {
             boolean created = fileSystem.createFile(fileName.trim());
 
             if (created) {
-                refreshFileList();
+                refreshAll();
                 updateStatus("Created: " + fileName);
 
-                // ask if user wants to edit the new file
                 int choice = JOptionPane.showConfirmDialog(this,
                         "File created: " + fileName + "\n\nWould you like to edit it now?",
                         "File Created",
@@ -515,7 +525,6 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        // open file in editor (same as double-click behavior)
         handleEdit(fileName);
     }
 
@@ -548,7 +557,6 @@ public class MainWindow extends JFrame {
         } else if (choice == JOptionPane.NO_OPTION) {
             System.exit(0);
         }
-        // CANCEL - do nothing
     }
 
     private void renameFile() {
@@ -571,8 +579,7 @@ public class MainWindow extends JFrame {
             boolean renamed = fileSystem.renameFile(oldName, newName.trim());
 
             if (renamed) {
-                refreshFileList();
-                updateDetailsPanel();
+                refreshAll();
                 updateStatus("Renamed: " + oldName + " → " + newName);
             } else {
                 JOptionPane.showMessageDialog(this,
@@ -604,7 +611,7 @@ public class MainWindow extends JFrame {
             boolean copied = fileSystem.copyFile(sourceName, destName.trim());
 
             if (copied) {
-                refreshFileList();
+                refreshAll();
                 updateStatus("Copied: " + sourceName + " → " + destName);
             } else {
                 JOptionPane.showMessageDialog(this,
@@ -627,11 +634,9 @@ public class MainWindow extends JFrame {
             return;
         }
 
-        // check if we're in recycle bin view
         if (fileListPanel.getViewMode() == FileListPanel.ViewMode.RECYCLE_BIN) {
-            // permanent delete
             int choice = JOptionPane.showConfirmDialog(this,
-                    "Permanently delete '" + fileName + "'?\n\nThis cannot be undone.",
+                    "Permanently delete '" + fileName + "'?\n\nThis will free the storage blocks and cannot be undone.",
                     "Permanent Delete",
                     JOptionPane.YES_NO_OPTION,
                     JOptionPane.WARNING_MESSAGE);
@@ -640,8 +645,8 @@ public class MainWindow extends JFrame {
                 boolean deleted = fileSystem.permanentDelete(fileName);
 
                 if (deleted) {
-                    refreshFileList();
-                    updateStatus("Permanently deleted: " + fileName);
+                    refreshAll();
+                    updateStatus("Permanently deleted: " + fileName + " (storage freed)");
                 } else {
                     JOptionPane.showMessageDialog(this,
                             "Could not delete file",
@@ -650,9 +655,8 @@ public class MainWindow extends JFrame {
                 }
             }
         } else {
-            // move to recycle bin
             int choice = JOptionPane.showConfirmDialog(this,
-                    "Move '" + fileName + "' to recycle bin?",
+                    "Move '" + fileName + "' to recycle bin?\n\n(Storage blocks remain allocated until permanent deletion)",
                     "Delete File",
                     JOptionPane.YES_NO_OPTION);
 
@@ -660,7 +664,7 @@ public class MainWindow extends JFrame {
                 boolean deleted = fileSystem.deleteFile(fileName);
 
                 if (deleted) {
-                    refreshFileList();
+                    refreshAll();
                     updateStatus("Moved to recycle bin: " + fileName);
                 } else {
                     JOptionPane.showMessageDialog(this,
@@ -685,12 +689,10 @@ public class MainWindow extends JFrame {
     }
 
     private void refreshFileList() {
-        fileListPanel.refresh();
-        updateStatusBar();
+        refreshAll();
     }
 
     private void searchFiles() {
-        // create search options panel
         JPanel searchPanel = new JPanel(new GridLayout(3, 1, 5, 5));
 
         JTextField queryField = new JTextField(20);
@@ -743,6 +745,8 @@ public class MainWindow extends JFrame {
                     message.append("Found ").append(results.size()).append(" file(s):\n\n");
                     for (Model.File f : results) {
                         message.append("  • ").append(f.getName());
+                        message.append(" (").append(f.getSize()).append(" bytes, ");
+                        message.append(f.getBlockCount()).append(" blocks)");
                         if (!f.getTags().isEmpty()) {
                             message.append(" [").append(String.join(", ", f.getTags())).append("]");
                         }
@@ -760,6 +764,30 @@ public class MainWindow extends JFrame {
         }
     }
 
+    private void showStorageInfo() {
+        JTextArea textArea = new JTextArea(fileSystem.getStorageInfo());
+        textArea.setEditable(false);
+        textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(400, 300));
+
+        JOptionPane.showMessageDialog(this, scrollPane,
+                "Storage Information", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void showSystemInfo() {
+        JTextArea textArea = new JTextArea(fileSystem.getSystemInfo());
+        textArea.setEditable(false);
+        textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(500, 400));
+
+        JOptionPane.showMessageDialog(this, scrollPane,
+                "System Information", JOptionPane.INFORMATION_MESSAGE);
+    }
+
     private void emptyRecycleBin() {
         int deletedCount = fileSystem.getDeletedFileCount();
 
@@ -773,6 +801,7 @@ public class MainWindow extends JFrame {
 
         int choice = JOptionPane.showConfirmDialog(this,
                 "Permanently delete all " + deletedCount + " file(s) in recycle bin?\n\n" +
+                        "This will free all storage blocks used by these files.\n" +
                         "This cannot be undone.",
                 "Empty Recycle Bin",
                 JOptionPane.YES_NO_OPTION,
@@ -780,10 +809,10 @@ public class MainWindow extends JFrame {
 
         if (choice == JOptionPane.YES_OPTION) {
             int count = fileSystem.emptyRecycleBin();
-            refreshFileList();
-            updateStatus("Permanently deleted " + count + " file(s)");
+            refreshAll();
+            updateStatus("Permanently deleted " + count + " file(s) - storage freed");
             JOptionPane.showMessageDialog(this,
-                    "Deleted " + count + " file(s) permanently",
+                    "Deleted " + count + " file(s) permanently\nStorage blocks freed.",
                     "Success",
                     JOptionPane.INFORMATION_MESSAGE);
         }
@@ -791,30 +820,45 @@ public class MainWindow extends JFrame {
 
     private void showAbout() {
         String message = "File Management System\n\n" +
-                "A simulated file system with features:\n" +
+                "A simulated file system with:\n" +
+                "  • Block-based virtual disk storage\n" +
                 "  • File creation, editing, and deletion\n" +
                 "  • Tag-based organization\n" +
                 "  • Version history (up to 5 versions)\n" +
                 "  • Recycle bin with restore\n" +
                 "  • Persistent storage\n\n" +
-                "Files: " + fileSystem.getFileCount() + " active, " +
+                "Storage Configuration:\n" +
+                "  • Block Size: " + fileSystem.getStorageBlockSize() + " bytes\n" +
+                "  • Total Blocks: " + fileSystem.getStorageTotalBlocks() + "\n" +
+                "  • Capacity: " + formatSize(fileSystem.getStorageTotalSize()) + "\n\n" +
+                "Current Status:\n" +
+                "  • Files: " + fileSystem.getFileCount() + " active, " +
                 fileSystem.getDeletedFileCount() + " deleted\n" +
-                "Total operations: " + fileSystem.getTotalOperations() + "\n\n" +
+                "  • Storage: " + String.format("%.1f%%", fileSystem.getStorageUsagePercentage()) + " used\n" +
+                "  • Operations: " + fileSystem.getTotalOperations() + "\n\n" +
                 "Built with Java Swing";
 
         JOptionPane.showMessageDialog(this, message, "About", JOptionPane.INFORMATION_MESSAGE);
     }
 
+    private String formatSize(int bytes) {
+        if (bytes >= 1024 * 1024) {
+            return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
+        } else if (bytes >= 1024) {
+            return String.format("%.2f KB", bytes / 1024.0);
+        } else {
+            return bytes + " bytes";
+        }
+    }
+
     // main method to launch the application
     public static void main(String[] args) {
-        // use system look and feel
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
-            // use default if system look and feel fails
+            // use default
         }
 
-        // create and show window on Event Dispatch Thread
         SwingUtilities.invokeLater(() -> new MainWindow());
     }
 }
